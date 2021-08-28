@@ -9,7 +9,7 @@
 # Discord bot used to look for daily schedule changes on tsrb.hr/b-smjena
 
 # Bot version
-ver = '2.0.0'
+ver = '2.0.1'
 
 # Import stuff
 from bs4 import BeautifulSoup
@@ -98,6 +98,10 @@ def site_check():
 
     soup = BeautifulSoup(source, 'lxml')
     table = soup.find('iframe')
+    if(table == None):
+        print("Can't get table link from site, skipping...")
+        start = 1
+        return
     tablelink = table.attrs
 
     newsource = requests.get(tablelink['src']).text
