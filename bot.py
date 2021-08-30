@@ -9,7 +9,7 @@
 # Discord bot used to look for daily schedule changes on tsrb.hr/b-smjena
 
 # Bot version
-ver = '2.0.1'
+ver = '2.1.1'
 
 # Import stuff
 from bs4 import BeautifulSoup
@@ -76,29 +76,34 @@ def is_int(s):
         return False
 
 # Set global variables
-start = 1
-mega_dict_old = {}
-mega_dict = {}
-first_run = 0
+A_classes = {'A', 'B', 'C', 'D', 'O'}
+B_classes = {'E', 'F', 'G', 'M', 'N'}
+start_A = 1
+start_B = 1
+mega_dict_old_A = {}
+mega_dict_old_B = {}
+first_run_A = 0
+first_run_B = 0
 notify = 0
 
-# Look for changes on site
-def site_check():
-    global start
-    global mega_dict
-    global mega_dict_old
-    global first_run
+# Look for changes on site A
+def site_check_B():
+    global start_B
+    global mega_dict_old_B
+    global first_run_B
     global notify
     global config
+    mega_dict = {}
     timer = 15
 
     sleep(timer)
+
     source = requests.get('https://tsrb.hr/b-smjena/').text
 
     soup = BeautifulSoup(source, 'lxml')
     table = soup.find('iframe')
     if(table == None):
-        print("Can't get table link from site, skipping...")
+        print("Can't get table link from site B, skipping...")
         start = 1
         return
     tablelink = table.attrs
@@ -106,53 +111,190 @@ def site_check():
     newsource = requests.get(tablelink['src']).text
     soup = BeautifulSoup(newsource, 'lxml')
 
-    control = 0
     A_classes = {'A', 'B', 'C', 'D', 'O'}
     B_classes = {'E', 'F', 'G', 'M', 'N'}
 
-    for i in soup.find_all('span'):
-        if(str(i.string).startswith('IZMJENE')):
-            title = '**' + i.text + '**' + "\n" + '```'
-        elif(
-        (len(i.text) == 3) and
-        is_int(i.text[0]) and
-        (int(i.text[0]) <= 4) and
-        (int(i.text[0]) >= 1) and
-        (i.text[2] in A_classes or i.text[2] in B_classes) and
-        (i.text[1] == '.')
-        ):
-            control = 1
-            class_name = i.text
-            
-            if(class_name not in mega_dict):
-                mega_dict[class_name] = title
-            else:
-                mega_dict[class_name] = mega_dict[class_name] + title
-        elif(control < 10 and control > 0):
-            mega_dict[class_name] = mega_dict[class_name] + str(control) + '. sat = ' + i.text + '\n'
-            if(control == 9):
-                mega_dict[class_name] = mega_dict[class_name] + '```' + '\n'
-            control = control + 1
-    if(first_run == 0):
-        mega_dict_old = dict(mega_dict)
-        first_run = 1
-        print('Finished first run Ready')
-    elif(mega_dict_old != mega_dict):
-                mega_dict_old = dict(mega_dict)
-                notify = 1
     mega_dict = {}
-    start = 1
+    mega_dict['titles'] = {}
+    control = 0
+
+    for span in soup.find_all('span'):
+        if(str(span.string).startswith('IZMJENE')):
+            mega_dict['titles'][str(control)] = '**' + span.text + '**'
+            control = control + 1
+
+    mega_dict['tables'] = {}
+    control = -1
+    table_count = 0
+
+    for table in soup.find_all('table'):
+        mega_dict['tables'][str(table_count)] = {}
+        for row in table.find_all('tr'):
+            for cell in row.find_all('td'):
+                test = 0
+                for span in cell.find_all('span'):
+                    if(
+                        (len(span.text) == 3) and
+                        is_int(span.text[0]) and
+                        (int(span.text[0]) <= 4) and
+                        (int(span.text[0]) >= 1) and
+                        (span.text[2] in A_classes or span.text[2] in B_classes) and
+                        (span.text[1] == '.')
+                    ):
+                        control = 0
+                        class_name = span.text
+                        mega_dict['tables'][str(table_count)][class_name] = {}
+                    elif(control < 10 and control > -1):
+                        if(test == 0):
+                            mega_dict['tables'][str(table_count)][class_name][str(control)] = ''
+                            test = 1
+                        mega_dict['tables'][str(table_count)][class_name][str(control)] = mega_dict['tables'][str(table_count)][class_name][str(control)] + ' ' + span.text
+
+                    if(control == 9):
+                        control = -1
+                if(control != -1):
+                    control = control + 1
+                if(cell.attrs['colspan'] == '2'):
+                    mega_dict['tables'][str(table_count)][class_name][str(control)] = ' ' + span.text
+                    control = control + 1
+        if(bool(mega_dict['tables'][str(table_count)])):
+            table_count = table_count + 1
+
+    mega_dict_temp = {}
+    for table_num, table in mega_dict['tables'].items():
+        if(bool(table)):
+            for class_name, class_value in table.items():
+                if(class_name not in mega_dict_temp):
+                    mega_dict_temp[class_name] = mega_dict['titles'][table_num] + '\n```'
+                else:
+                    mega_dict_temp[class_name] = mega_dict_temp[class_name] + mega_dict['titles'][table_num] + '\n```'
+                for hour, value in class_value.items():
+                    mega_dict_temp[class_name] = mega_dict_temp[class_name] + hour + '. sat =' + value + '\n'
+                mega_dict_temp[class_name] = mega_dict_temp[class_name] + '```\n'
+    mega_dict = dict(mega_dict_temp)
+
+    if(first_run_B == 0):
+        mega_dict_old_B = dict(mega_dict)
+        first_run_B = 1
+        print('Finished first run B, Ready')
+    elif(mega_dict != mega_dict_old_B):
+        mega_dict_old_B = dict(mega_dict)
+        notify = 1
+
     sleep(2)
+    start_B = 1
+
+def site_check_A():
+    global start_A
+    global mega_dict_old_A
+    global first_run_A
+    global notify
+    global config
+    mega_dict = {}
+    timer = 15
+
+    sleep(timer)
+
+    source = requests.get('https://tsrb.hr/a-smjena/').text
+
+    soup = BeautifulSoup(source, 'lxml')
+    table = soup.find('iframe')
+    if(table == None):
+        print("Can't get table link from site A, skipping...")
+        start = 1
+        return
+    tablelink = table.attrs
+
+    newsource = requests.get(tablelink['src']).text
+    soup = BeautifulSoup(newsource, 'lxml')
+
+    A_classes = {'A', 'B', 'C', 'D', 'O'}
+    B_classes = {'E', 'F', 'G', 'M', 'N'}
+
+    mega_dict = {}
+    mega_dict['titles'] = {}
+    control = 0
+
+    for span in soup.find_all('span'):
+        if(str(span.string).startswith('IZMJENE')):
+            mega_dict['titles'][str(control)] = '**' + span.text + '**'
+            control = control + 1
+
+    mega_dict['tables'] = {}
+    control = -1
+    table_count = 0
+
+    for table in soup.find_all('table'):
+        mega_dict['tables'][str(table_count)] = {}
+        for row in table.find_all('tr'):
+            for cell in row.find_all('td'):
+                test = 0
+                for span in cell.find_all('span'):
+                    if(
+                        (len(span.text) == 3) and
+                        is_int(span.text[0]) and
+                        (int(span.text[0]) <= 4) and
+                        (int(span.text[0]) >= 1) and
+                        (span.text[2] in A_classes or span.text[2] in B_classes) and
+                        (span.text[1] == '.')
+                    ):
+                        control = 0
+                        class_name = span.text
+                        mega_dict['tables'][str(table_count)][class_name] = {}
+                    elif(control < 10 and control > -1):
+                        if(test == 0):
+                            mega_dict['tables'][str(table_count)][class_name][str(control)] = ''
+                            test = 1
+                        mega_dict['tables'][str(table_count)][class_name][str(control)] = mega_dict['tables'][str(table_count)][class_name][str(control)] + ' ' + span.text
+
+                    if(control == 9):
+                        control = -1
+                if(control != -1):
+                    control = control + 1
+                if(cell.attrs['colspan'] == '2'):
+                    mega_dict['tables'][str(table_count)][class_name][str(control)] = ' ' + span.text
+                    control = control + 1
+        if(bool(mega_dict['tables'][str(table_count)])):
+            table_count = table_count + 1
+
+    mega_dict_temp = {}
+    for table_num, table in mega_dict['tables'].items():
+        if(bool(table)):
+            for class_name, class_value in table.items():
+                if(class_name not in mega_dict_temp):
+                    mega_dict_temp[class_name] = mega_dict['titles'][table_num] + '\n```'
+                else:
+                    mega_dict_temp[class_name] = mega_dict_temp[class_name] + mega_dict['titles'][table_num] + '\n```'
+                for hour, value in class_value.items():
+                    mega_dict_temp[class_name] = mega_dict_temp[class_name] + hour + '. sat =' + value + '\n'
+                mega_dict_temp[class_name] = mega_dict_temp[class_name] + '```\n'
+    mega_dict = dict(mega_dict_temp)
+
+    if(first_run_A == 0):
+        mega_dict_old_A = dict(mega_dict)
+        first_run_A = 1
+        print('Finished first run A, Ready')
+    elif(mega_dict != mega_dict_old_A):
+        mega_dict_old_A = dict(mega_dict)
+        notify = 1
+
+    sleep(2)
+    start_A = 1
 
 # Start site check again when its done
 def watch():
-    global start
+    global start_A
+    global start_B
     while True:
         sleep(1)
-        if start == 1:
-            start = 0
-            site_check_thread = threading.Thread(target = site_check)
-            site_check_thread.start()
+        if start_A == 1:
+            start_A = 0
+            site_check_A_thread = threading.Thread(target = site_check_A)
+            site_check_A_thread.start()
+        if start_B == 1:
+            start_B = 0
+            site_check_B_thread = threading.Thread(target = site_check_B)
+            site_check_B_thread.start()
 
 watch_thread = threading.Thread(target=watch)
 watch_thread.start()
@@ -209,10 +351,14 @@ async def my_loop():
         for server in client.guilds:
             if data[str(server.id)]['channel_id'] != None and data[str(server.id)]['class'] != None:
                 channel = client.get_channel(data[str(server.id)]['channel_id'])
+                if data[str(server.id)]['class'][2] in A_classes:
+                    description = mega_dict_old_A[data[str(server.id)]['class']]
+                else:
+                    description = mega_dict_old_B[data[str(server.id)]['class']]
                 embed=discord.Embed(
                     title='Raspored ' + data[str(server.id)]['class'],
                     url='https://www.tsrb.hr/b-smjena/',
-                    description = mega_dict_old[data[str(server.id)]['class']],
+                    description = description,
                     color = 0xFF5733)
                 await channel.send(embed=embed)
         notify = 0
@@ -245,8 +391,6 @@ async def channel(ctx):
 @conf.command()
 async def raz(ctx, class_name: str):
 
-    A_classes = {'A', 'B', 'C', 'D', 'O'}
-    B_classes = {'E', 'F', 'G', 'M', 'N'}
     class_name = class_name.upper()
 
     if(
@@ -295,10 +439,14 @@ async def status(ctx):
 async def raspored(ctx):
     server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
     class_name = data[str(server_id)]['class']
-    if(first_run == 0):
+    if(first_run_A == 0 or first_run_B == 0):
         embed = discord.Embed(title = 'ZAHTJEV ODBIJEN', description = 'Pričekaj, povlačim podatke sa stranice\n ovo može potrajati do 20 s', color = 0xFF5733)
     else:
-        embed = discord.Embed(title = "Raspored " + class_name, url = 'https://www.tsrb.hr/b-smjena/', description = mega_dict_old[class_name], color = 0xFF5733)
+        if data[str(server_id)]['class'][2] in A_classes:
+            description = mega_dict_old_A[data[str(server_id)]['class']]
+        else:
+            description = mega_dict_old_B[data[str(server_id)]['class']]
+        embed = discord.Embed(title = "Raspored " + class_name, url = 'https://www.tsrb.hr/b-smjena/', description = description, color = 0xFF5733)
     await ctx.send(embed=embed)
 
 # Create a version command to display bot version
@@ -320,10 +468,10 @@ async def conf_error(ctx, error):
     if isinstance(error, discord.ext.commands.errors.NoPrivateMessage):
         await ctx.send("This command can't be used in private messages")
 
-@raspored.error
-async def raspored_error(ctx, error):
-    if isinstance(error, discord.ext.commands.errors.NoPrivateMessage):
-        await ctx.send("This command can't be used in private messages")
+#@raspored.error
+#async def raspored_error(ctx, error):
+#    if isinstance(error, discord.ext.commands.errors.NoPrivateMessage):
+#        await ctx.send("This command can't be used in private messages")
 
     
 # Run client
