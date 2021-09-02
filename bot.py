@@ -9,7 +9,7 @@
 # Discord bot used to look for daily schedule changes on tsrb.hr/b-smjena
 
 # Bot version
-ver = '2.1.4'
+ver = '2.1.5'
 
 # Import stuff
 from bs4 import BeautifulSoup
@@ -139,7 +139,13 @@ def site_check_B():
     tablelink = table.attrs
 
     # Get table code from iframe attribute
-    newsource = requests.get(tablelink['src']).text
+    try:
+        newsource = requests.get(tablelink['src']).text
+    except:
+        rasprint("Error occurred while getting data from iframe link B, skipping...")
+        start_B = 1
+        return
+    # Convert data to html
     soup = BeautifulSoup(newsource, 'lxml')
 
     # Set class names for each shift
@@ -251,7 +257,7 @@ def site_check_B():
     if(first_run_B == 0):
         mega_dict_old_B = dict(mega_dict)
         first_run_B = 1
-        rasprint('Finished first run B, Ready')
+        rasprint('Finished first run B successfully')
     # If this is not first run compare old and new dict
     # If they are diffrent set old dict to new one and notify variable to 1
     elif(mega_dict != mega_dict_old_B):
@@ -296,7 +302,13 @@ def site_check_A():
     tablelink = table.attrs
 
     # Get table code from iframe attribute
-    newsource = requests.get(tablelink['src']).text
+    try:
+        newsource = requests.get(tablelink['src']).text
+    except:
+        rasprint("Error occurred while getting data from iframe link A, skipping...")
+        start_A = 1
+        return
+    # Convert data to html
     soup = BeautifulSoup(newsource, 'lxml')
 
     # Set class names for each shift
@@ -408,7 +420,7 @@ def site_check_A():
     if(first_run_A == 0):
         mega_dict_old_A = dict(mega_dict)
         first_run_A = 1
-        rasprint('Finished first run A, Ready')
+        rasprint('Finished first run A successfully')
     # If this is not first run compare old and new dict
     # If they are diffrent set old dict to new one and notify variable to 1
     elif(mega_dict != mega_dict_old_A):
@@ -436,6 +448,19 @@ def watch():
             site_check_B_thread = threading.Thread(target = site_check_B)
             site_check_B_thread.start()
 
+# Get input from console
+def get_input():
+    while True:
+        value = input()
+        if(value == 'list'):
+            rasprint('List of servers in database:')
+            for k, v in data.items():
+                rasprint('- ' + data[k]['name'])
+
+# Start get input from console thread
+get_input_thread = threading.Thread(target=get_input)
+get_input_thread.start()
+
 # Start watch thread
 watch_thread = threading.Thread(target=watch)
 watch_thread.start()
@@ -460,6 +485,7 @@ async def on_ready():
     # Print info to console
     rasprint('Connected to bot: {}'.format(client.user))
     rasprint('Bot ID: {}'.format(client.user.id))
+    rasprint('Ready to ROCK')
     # Set bot status
     await client.change_presence(
         activity=discord.Activity(type = discord.ActivityType.watching, name = 'for .help'))
