@@ -9,7 +9,7 @@
 # Discord bot used to look for daily schedule changes on tsrb.hr/b-smjena
 
 # Bot version
-ver = '2.1.2'
+ver = '2.1.4'
 
 # Import stuff
 from bs4 import BeautifulSoup
@@ -26,13 +26,17 @@ import json
 
 # Print version in console (in color)
 def prRed(skk): print("\033[91m{}\033[00m" .format(skk))
+prRed("RasporedBot\n")
 prRed("Version: " + ver)
 prRed("Made by BrownBird Team\n")
 
+# Create function to print stuff to console
+def rasprint(message): print( '[\033[91mRasporedBot\033[00m] [' + strftime('%H:%M:%S', localtime()) + '] ' + message)
+
 # Create file config.yml if doesn't exist
 if(os.path.isfile('config.yml') == False):
-    print('config.yml not found')
-    print('Creating config.yml ...')
+    rasprint('config.yml not found')
+    rasprint('Creating config.yml ...')
     config = """\
 # This is a settings file for Raspored bot
 # Don't delete settings in this file
@@ -45,13 +49,13 @@ settings:
 """
     with open('config.yml', 'x') as f:
         f.write(config)
-    print('Please configure bot in config.yml and restart it')
+    rasprint('Please configure bot in config.yml and restart it')
     exit()
 
 # Create file database.json if doesn't exist to store server data
 if os.path.isfile('database.json') == False:
-    print('File database.json not found')
-    print('Creating file database.json...')
+    rasprint('File database.json not found')
+    rasprint('Creating file database.json...')
     data = {}
     with open('database.json', 'x') as f:
         f = f.write(json.dumps(data))
@@ -67,10 +71,10 @@ with open('config.yml', 'r') as f:
 
 # Check if settings in config.yml are configured corretly
 if(config['settings']['token'] == ''):
-    print('There is no token in config file')
+    rasprint('There is no token in config file')
     exit()
 # Print to console if test has passed
-print('Config OK')
+rasprint('Config OK')
 
 # Create function to check if character in string is number
 # Later used to check if class name is vaild
@@ -116,7 +120,12 @@ def site_check_B():
     sleep(timer)
 
     # Make reguest and get data from the site
-    source = requests.get('https://tsrb.hr/b-smjena/').text
+    try:
+        source = requests.get('https://tsrb.hr/b-smjena/').text
+    except:
+        rasprint("Error occurred while getting data from site B, skipping...")
+        start_B = 1
+        return
 
     # Convert data to html code
     soup = BeautifulSoup(source, 'lxml')
@@ -124,8 +133,8 @@ def site_check_B():
     table = soup.find('iframe')
     # If there is no iframe print error and skip
     if(table == None):
-        print("Can't get table link from site B, skipping...")
-        start = 1
+        rasprint("Can't get table link from site B, skipping...")
+        start_B = 1
         return
     tablelink = table.attrs
 
@@ -242,7 +251,7 @@ def site_check_B():
     if(first_run_B == 0):
         mega_dict_old_B = dict(mega_dict)
         first_run_B = 1
-        print('Finished first run B, Ready')
+        rasprint('Finished first run B, Ready')
     # If this is not first run compare old and new dict
     # If they are diffrent set old dict to new one and notify variable to 1
     elif(mega_dict != mega_dict_old_B):
@@ -268,7 +277,12 @@ def site_check_A():
     sleep(timer)
 
     # Make reguest and get data from the site
-    source = requests.get('https://tsrb.hr/a-smjena/').text
+    try:
+        source = requests.get('https://tsrb.hr/a-smjena/').text
+    except:
+        rasprint("Error occurred while getting data from site A, skipping...")
+        start_A = 1
+        return
 
     # Convert data to html code
     soup = BeautifulSoup(source, 'lxml')
@@ -276,8 +290,8 @@ def site_check_A():
     table = soup.find('iframe')
     # If there is no iframe print error and skip
     if(table == None):
-        print("Can't get table link from site A, skipping...")
-        start = 1
+        rasprint("Can't get table link from site A, skipping...")
+        start_A = 1
         return
     tablelink = table.attrs
 
@@ -394,7 +408,7 @@ def site_check_A():
     if(first_run_A == 0):
         mega_dict_old_A = dict(mega_dict)
         first_run_A = 1
-        print('Finished first run A, Ready')
+        rasprint('Finished first run A, Ready')
     # If this is not first run compare old and new dict
     # If they are diffrent set old dict to new one and notify variable to 1
     elif(mega_dict != mega_dict_old_A):
@@ -436,9 +450,7 @@ handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(me
 logger.addHandler(handler)
 
 # Create client variable
-client = commands.Bot(command_prefix = config['settings']['bot_prefix'])
-# Remove default help command
-client.remove_command('help')
+client = commands.Bot(command_prefix = config['settings']['bot_prefix'], help_command = None)
 
 @client.event
 # When bot is ready
@@ -446,11 +458,11 @@ async def on_ready():
     # Start loop to check notify variable
     my_loop.start()
     # Print info to console
-    print('Connected to bot: {}'.format(client.user))
-    print('Bot ID: {}'.format(client.user.id))
+    rasprint('Connected to bot: {}'.format(client.user))
+    rasprint('Bot ID: {}'.format(client.user.id))
     # Set bot status
     await client.change_presence(
-        activity=discord.Activity(type = discord.ActivityType.watching, name = 'for something'))
+        activity=discord.Activity(type = discord.ActivityType.watching, name = 'for .help'))
     # Check if all servers are in database.json
     # If they are not add them and write to the file
     for server in client.guilds:
@@ -524,14 +536,15 @@ async def my_loop():
 async def conf(ctx):
     # Display message with no attribute
     if ctx.invoked_subcommand is None:
-        embed = discord.Embed(title='Bot configuration', color = 0xFF5733)
-        embed.add_field(name = '&conf name', value = 'Run this command in channel where you want to receve notifications.', inline = False)
-        embed.add_field(name = '&conf raz <class name>', value = 'Set the class name, replace `<class name>` with yours.', inline = False)
+        embed = discord.Embed(title='Konfiguriranje Bota', color = 0xFF5733)
+        embed.add_field(name = '.conf kanal', value = 'Napišite ovu komandu u kanal gdje želite dobivati obavjesti.', inline = False)
+        embed.add_field(name = '.conf raz <ime razreda>', value = 'Definirajte željeni razred, zamjenite `<ime razreda>` sa svojim razredom.', inline = False)
+        embed.add_field(name = '.conf obrisi', value = 'Poništite konfiguraciju bota.', inline = False)
         await ctx.send(embed = embed)
 
-# Add conf subcommand channel, set channel in database to channel where command is issued
+# Add conf subcommand kanal, set channel in database to channel where command is issued
 @conf.command()
-async def channel(ctx):
+async def kanal(ctx):
     channel_id = discord.utils.get(ctx.guild.channels, name=str(ctx.channel)).id
     server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
     data[str(server_id)]['channel_id'] = channel_id
@@ -539,8 +552,8 @@ async def channel(ctx):
     with open('database.json', 'w') as f:
         f.write(json.dumps(data))
     embed = discord.Embed(
-        title = 'Notifications channel',
-        description = 'Notifications channel has been set to **{}**,\n you will receve notifications here when schedule changes.'.format(str(ctx.channel)),
+        title = 'Kanal za obavjesti',
+        description = 'Kanal za obavjesti je postavljen na **{}**,\n Ovdje ćete primiti obavjest kada se raspored promjeni.'.format(str(ctx.channel)),
         color = 0xFF5733
     )
     await ctx.send(embed = embed)
@@ -561,7 +574,7 @@ async def raz(ctx, class_name: str):
         (class_name[1] != '.')
     ):  
         # If class is not vaild, send error message
-        await ctx.send("Please set vaild class name (example: 2.G)")
+        await ctx.send("Napišite razred pravilno (primjer: 2.G)")
         return
     
     # If class is vaild save it in database
@@ -579,8 +592,8 @@ async def raz(ctx, class_name: str):
     
     # Create discord embed and send it to comfirm succesful data saving
     embed = discord.Embed(
-        title = 'School Class',
-        description = 'School class has been set to **{}** in **{}** shift, you will be informed when schedule changes for that school class.'.format(class_name, data[str(server_id)]['shift']),
+        title = 'Razred',
+        description = 'Razred je postavljen na **{}** u **{}** smjeni, bit ćete informirani kada dođe do promjena u rasporedu za taj razred.'.format(class_name, data[str(server_id)]['shift']),
         color = 0xFF5733
     )
     await ctx.send(embed = embed)
@@ -590,31 +603,107 @@ async def raz(ctx, class_name: str):
 async def status(ctx):
     server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
     embed = discord.Embed(
-        title = 'Configuration Status',
+        title = 'Status Konfiguracija',
         color = 0xFF5733
     )
-    embed.add_field(name = 'Class', value = '```' + str(data[str(server_id)]['class']) + '```', inline = True)
-    embed.add_field(name = 'Shift', value = '```' + str(data[str(server_id)]['shift']) + '```', inline = True)
-    embed.add_field(name = 'Notifications Channel', value = '```' + str(data[str(server_id)]['channel_name']) + '```', inline = False)
+    embed.add_field(name = 'Razred', value = '```' + str(data[str(server_id)]['class']) + '```', inline = True)
+    embed.add_field(name = 'Smjena', value = '```' + str(data[str(server_id)]['shift']) + '```', inline = True)
+    embed.add_field(name = 'Kanal za obavjesti', value = '```' + str(data[str(server_id)]['channel_name']) + '```', inline = False)
     await ctx.send(embed = embed)
 
-# Add command raspored to send last changes, for class defined in database
-@client.command()
-@commands.guild_only()
-async def raspored(ctx):
+# Add conf subcommand obrisi, clear all configurations for the server
+@conf.command()
+async def obrisi(ctx):
     server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
-    class_name = data[str(server_id)]['class']
+    data[str(server_id)]['class'] = None
+    data[str(server_id)]['shift'] = None
+    data[str(server_id)]['channel_id'] = None
+    data[str(server_id)]['channel_name'] = None
+    with open('database.json', 'w') as f:
+        f.write(json.dumps(data))
+    await ctx.send('Sve konfiguracije su obrisane iz baze podataka')
+
+# Add command raspored to send last changes, for class defined in database, or specified as command attribute
+@client.command()
+async def raspored(ctx, name = None):
+    # Send error if first run is not done yet
     if(first_run_A == 0 or first_run_B == 0):
-        embed = discord.Embed(title = 'ZAHTJEV ODBIJEN', description = 'Pričekaj, povlačim podatke sa stranice\n ovo može potrajati do 20 s', color = 0xFF5733)
-    else:
-        if data[str(server_id)]['class'][2] in A_classes:
-            description = mega_dict_old_A[data[str(server_id)]['class']]
+        embed = discord.Embed(title = 'ZAHTJEV ODBIJEN', description = 'Pričekaj, povlačim podatke sa stranice\n ovo može potrajati do 30 s', color = 0xFF5733)
+    elif(name == None and ctx.guild != None):
+        server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
+        if(data[str(server_id)]['class'] != None):
+            class_name = data[str(server_id)]['class']
+            if data[str(server_id)]['class'][2] in A_classes:
+                description = mega_dict_old_A[data[str(server_id)]['class']]
+            else:
+                description = mega_dict_old_B[data[str(server_id)]['class']]
+            embed = discord.Embed(title = "Raspored " + class_name, url = 'https://www.tsrb.hr/b-smjena/', description = description, color = 0xFF5733)
         else:
-            description = mega_dict_old_B[data[str(server_id)]['class']]
-        embed = discord.Embed(title = "Raspored " + class_name, url = 'https://www.tsrb.hr/b-smjena/', description = description, color = 0xFF5733)
+            embed = discord.Embed(title = "Razred nije definiran", description = "Kako bi ste koristili ovu komandu potrebno je definirati razred", color = 0xFF5733)
+            embed.add_field(name = 'Definirajte razred (Admin)', value = '```.conf raz <ime razreda>```', inline = False)
+            embed.add_field(name = 'Napišite željeni razred u komandi', value = '```.raspored <ime razreda>```', inline = False)
+
+    elif(name == None and ctx.guild == None):
+        embed = discord.Embed(title = "Razred nije definiran", description = "Kako bi ste koristili bota u privatnim porukama potrebno je definirati razred.", color = 0xFF5733)
+        embed.add_field(name = 'Primjer', value = '```.raspored <class name>```', inline = False)
+    elif(name != None):
+        name = name.upper()
+        if(
+            (len(name) != 3) or
+            not is_int(name[0]) or
+            (int(name[0]) > 4) or
+            (int(name[0]) < 1) or
+            (name[2] not in A_classes and name[2] not in B_classes) or 
+            (name[1] != '.')
+        ):  
+            embed = discord.Embed(title = "Razred nije pravilno definiran", description = "Traženi razred nije pronađen.", color = 0xFF5733)
+            embed.add_field(name = 'Primjer', value = '```.raspored <ime razreda>```', inline = False)
+        else:
+            if name[2] in A_classes:
+                description = mega_dict_old_A[name]
+            else:
+                description = mega_dict_old_B[name]
+            embed = discord.Embed(title = "Raspored " + name, url = 'https://www.tsrb.hr/b-smjena/', description = description, color = 0xFF5733)
     await ctx.send(embed=embed)
 
-# Add a version command to display bot version
+# Add help command to display help message
+@client.command()
+async def help(ctx):
+    description = """\
+Ovo je lista komadi raspored bota i upute za korištenje,
+samo administratori servera mogu izvršiti komande označene sa (Admin).
+**Napomena:** bot će automatski slati obavjesti samo ako su i kanal i razred konfigurirani"""
+    embed = discord.Embed(
+        title = 'Pomoć (Help)',
+        description = description,
+        color = 0xFF5733
+    )
+    embed.add_field(
+        name = 'Raspored',
+        value = '```.raspored```\nOva komanda ispisat će posljednje izmjene u rasporedu za razred definiran pri konfiguraciji, te se neće izvršiti ukoliko razred nije definiran.',
+        inline = False
+    )
+    embed.add_field(
+        name = 'Raspored za razred',
+        value = '```.raspored <ime razreda>```\nOva komanda ispisat će posljednje izmjene za razred naveden u komandi.\n(Također radi i u PM)'
+    )
+    embed.add_field(
+        name = 'Konfiguracija kanala (Admin)', 
+        value = '```.conf kanal```\nU kanal u kojem je izvršena komanda bot će slati obavjesti kada se raspored promjeni.',
+        inline = False
+        )
+    embed.add_field(
+        name = 'Konfiguracija razreda (Admin)',
+        value = '```.conf raz <ime razreda>```\nZa razred koji je naveden u komandi bot će slati obavjesti kada se raspored promjeni.',
+        inline = False
+        )
+    embed.add_field(
+        name = 'Brisanje konfiguracije (Admin)',
+        value = '```.conf obrisi```\nUkoliko želite poništiti konfiguraciju bota za vaš server, izvršite ovu komandu.'
+    )
+    await ctx.send(embed = embed)
+
+# Add version command to display bot version
 @client.command()
 async def version(ctx):
     await ctx.send(
@@ -625,23 +714,22 @@ async def version(ctx):
 async def raz_error(ctx, error):
     # Send error message when class in not specified after raz command
     if isinstance(error, discord.ext.commands.errors.MissingRequiredArgument):
-        await ctx.send("Please specify school class")
+        await ctx.send("Razred nije definiran u komandi. Napišite .help za pomoć.")
 
 @conf.error
 async def conf_error(ctx, error):
     # Send error message if non admin try to execute command
     if isinstance(error, discord.ext.commands.errors.MissingPermissions):
-        await ctx.send("You don't have a permission to execute that command")
+        await ctx.send("Nemate ovlasti za izvršavanje ove komande.")
     # Send error message if executed as private message
     if isinstance(error, discord.ext.commands.errors.NoPrivateMessage):
-        await ctx.send("This command can't be used in private messages")
-
-@raspored.error
-async def raspored_error(ctx, error):
-    # Send error message if executed as private message
-    if isinstance(error, discord.ext.commands.errors.NoPrivateMessage):
-        await ctx.send("This command can't be used in private messages")
+        await ctx.send("Ova komanda se ne može koristiti u privatnim porukama.")
 
     
 # Run client with token form config.yml
-client.run(config['settings']['token'])
+while True:
+    try:
+        client.run(config['settings']['token'])
+    except:
+        rasprint('Error while connecting to discord')
+        sleep(1)
