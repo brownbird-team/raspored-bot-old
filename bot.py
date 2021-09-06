@@ -6,10 +6,10 @@
 #                 |_|                         
 
 # Made by BrownBird team
-# Discord bot used to look for daily schedule changes on tsrb.hr/b-smjena
+# Discord bot used to look for daily schedule changes on tsrb.hr
 
 # Bot version
-ver = '2.1.5'
+version = '2.1.5'
 
 # Import stuff
 from bs4 import BeautifulSoup
@@ -27,7 +27,7 @@ import json
 # Print version in console (in color)
 def prRed(skk): print("\033[91m{}\033[00m" .format(skk))
 prRed("RasporedBot\n")
-prRed("Version: " + ver)
+prRed("Version: " + version)
 prRed("Made by BrownBird Team\n")
 
 # Create function to print stuff to console
@@ -104,9 +104,16 @@ first_run_B = 0
 # dictionary to discord
 notify_A = 0
 notify_B = 0
+# Set embed color for bot
+embed_color = 0xFF5733
+# Debbug mode variable
+debug_mode = 0
 
 # Look for changes on site B
 def site_check_B():
+    # Debug mode
+    if(debug_mode == 1):
+        rasprint('Run B starting')
     # Add global variables and create local ones
     global start_B
     global mega_dict_old_B
@@ -121,7 +128,7 @@ def site_check_B():
 
     # Make reguest and get data from the site
     try:
-        source = requests.get('https://tsrb.hr/b-smjena/').text
+        source = requests.get('https://www.tsrb.hr/b-smjena/').text
     except:
         rasprint("Error occurred while getting data from site B, skipping...")
         start_B = 1
@@ -129,18 +136,22 @@ def site_check_B():
 
     # Convert data to html code
     soup = BeautifulSoup(source, 'lxml')
-    # Find iframe in the code
-    table = soup.find('iframe')
+    # Find iframes in the code
+    tables = soup.find_all('iframe')
     # If there is no iframe print error and skip
-    if(table == None):
+    if(tables == None):
         rasprint("Can't get table link from site B, skipping...")
         start_B = 1
         return
-    tablelink = table.attrs
+    # find right iframe link in list
+    for table in tables:
+        tlink = table.attrs
+        if 'docs.google.com' in tlink['src']:
+            tablelink = tlink['src']
 
     # Get table code from iframe attribute
     try:
-        newsource = requests.get(tablelink['src']).text
+        newsource = requests.get(tablelink).text
     except:
         rasprint("Error occurred while getting data from iframe link B, skipping...")
         start_B = 1
@@ -261,15 +272,22 @@ def site_check_B():
     # If this is not first run compare old and new dict
     # If they are diffrent set old dict to new one and notify variable to 1
     elif(mega_dict != mega_dict_old_B):
+        rasprint('Changes has been made in B shift')
         mega_dict_old_B = dict(mega_dict)
         notify_B = 1
 
     # Sleep for 2 sec and set start variable to 1 so watch thread will restart site check
     sleep(2)
     start_B = 1
+    # Debug mode
+    if(debug_mode == 1):
+        rasprint('Run B finished')
 
 # Look for changes on site A
 def site_check_A():
+    # Debug mode
+    if(debug_mode == 1):
+        rasprint('Run A starting')
     # Add global variables and create local ones
     global start_A
     global mega_dict_old_A
@@ -292,18 +310,22 @@ def site_check_A():
 
     # Convert data to html code
     soup = BeautifulSoup(source, 'lxml')
-    # Find iframe in the code
-    table = soup.find('iframe')
+    # Find iframes in the code
+    tables = soup.find_all('iframe')
     # If there is no iframe print error and skip
-    if(table == None):
+    if(tables == None):
         rasprint("Can't get table link from site A, skipping...")
         start_A = 1
         return
-    tablelink = table.attrs
+    # find right iframe link in list
+    for table in tables:
+        tlink = table.attrs
+        if 'docs.google.com' in tlink['src']:
+            tablelink = tlink['src']
 
     # Get table code from iframe attribute
     try:
-        newsource = requests.get(tablelink['src']).text
+        newsource = requests.get(tablelink).text
     except:
         rasprint("Error occurred while getting data from iframe link A, skipping...")
         start_A = 1
@@ -424,12 +446,16 @@ def site_check_A():
     # If this is not first run compare old and new dict
     # If they are diffrent set old dict to new one and notify variable to 1
     elif(mega_dict != mega_dict_old_A):
+        rasprint('Changes has been made in A shift')
         mega_dict_old_A = dict(mega_dict)
         notify_A = 1
 
     # Sleep for 2 sec and set start variable to 1 so watch thread will restart site check
     sleep(2)
     start_A = 1
+    # Debug mode
+    if(debug_mode == 1):
+        rasprint('Run A finished')
 
 # Start site check again when its done
 def watch():
@@ -450,12 +476,27 @@ def watch():
 
 # Get input from console
 def get_input():
+    global debug_mode
+    global notify_A
+    global notify_B
     while True:
         value = input()
         if(value == 'list'):
             rasprint('List of servers in database:')
             for k, v in data.items():
                 rasprint('- ' + data[k]['name'])
+        if(value == 'debug on'):
+            debug_mode = 1
+            rasprint('Debug mode on')
+        if(value == 'debug off'):
+            debug_mode = 0
+            rasprint('Debug mode off')
+        if(value == 'notify a'):
+            rasprint('Sending last change to all configured servers in A shift')
+            notify_A = 1
+        if(value == 'notify b'):
+            rasprint('Sending last change to all cinfigured servers in B shift')
+            notify_B = 1
 
 # Start get input from console thread
 get_input_thread = threading.Thread(target=get_input)
@@ -532,7 +573,7 @@ async def my_loop():
                     title='Raspored ' + data[str(server.id)]['class'],
                     url='https://www.tsrb.hr/a-smjena/',
                     description = description,
-                    color = 0xFF5733)
+                    color = embed_color)
                 await channel.send(embed=embed)
         # Set notify variable back to 0
         notify_A = 0
@@ -548,7 +589,7 @@ async def my_loop():
                     title='Raspored ' + data[str(server.id)]['class'],
                     url='https://www.tsrb.hr/b-smjena/',
                     description = description,
-                    color = 0xFF5733)
+                    color = embed_color)
                 await channel.send(embed=embed)
         # Set notify variable back to 0
         notify_B = 0
@@ -562,7 +603,7 @@ async def my_loop():
 async def conf(ctx):
     # Display message with no attribute
     if ctx.invoked_subcommand is None:
-        embed = discord.Embed(title='Konfiguriranje Bota', color = 0xFF5733)
+        embed = discord.Embed(title='Konfiguriranje Bota', color = embed_color)
         embed.add_field(name = '.conf kanal', value = 'Napišite ovu komandu u kanal gdje želite dobivati obavjesti.', inline = False)
         embed.add_field(name = '.conf raz <ime razreda>', value = 'Definirajte željeni razred, zamjenite `<ime razreda>` sa svojim razredom.', inline = False)
         embed.add_field(name = '.conf obrisi', value = 'Poništite konfiguraciju bota.', inline = False)
@@ -580,7 +621,7 @@ async def kanal(ctx):
     embed = discord.Embed(
         title = 'Kanal za obavjesti',
         description = 'Kanal za obavjesti je postavljen na **{}**,\n Ovdje ćete primiti obavjest kada se raspored promjeni.'.format(str(ctx.channel)),
-        color = 0xFF5733
+        color = embed_color
     )
     await ctx.send(embed = embed)
 
@@ -620,7 +661,7 @@ async def raz(ctx, class_name: str):
     embed = discord.Embed(
         title = 'Razred',
         description = 'Razred je postavljen na **{}** u **{}** smjeni, bit ćete informirani kada dođe do promjena u rasporedu za taj razred.'.format(class_name, data[str(server_id)]['shift']),
-        color = 0xFF5733
+        color = embed_color
     )
     await ctx.send(embed = embed)
 
@@ -630,7 +671,7 @@ async def status(ctx):
     server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
     embed = discord.Embed(
         title = 'Status Konfiguracija',
-        color = 0xFF5733
+        color = embed_color
     )
     embed.add_field(name = 'Razred', value = '```' + str(data[str(server_id)]['class']) + '```', inline = True)
     embed.add_field(name = 'Smjena', value = '```' + str(data[str(server_id)]['shift']) + '```', inline = True)
@@ -654,26 +695,36 @@ async def obrisi(ctx):
 async def raspored(ctx, name = None):
     # Send error if first run is not done yet
     if(first_run_A == 0 or first_run_B == 0):
-        embed = discord.Embed(title = 'ZAHTJEV ODBIJEN', description = 'Pričekaj, povlačim podatke sa stranice\n ovo može potrajati do 30 s', color = 0xFF5733)
+        embed = discord.Embed(title = 'ZAHTJEV ODBIJEN', description = 'Pričekaj, povlačim podatke sa stranice\n ovo može potrajati do 30 s', color = embed_color)
+    # If commands has no argument and is send in server
     elif(name == None and ctx.guild != None):
         server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
+        # If class is configured in that server
         if(data[str(server_id)]['class'] != None):
             class_name = data[str(server_id)]['class']
+            # If configured class is in A shift
             if data[str(server_id)]['class'][2] in A_classes:
                 description = mega_dict_old_A[data[str(server_id)]['class']]
+                url = 'https://www.tsrb.hr/a-smjena/'
+            # If configured class is in B shift
             else:
                 description = mega_dict_old_B[data[str(server_id)]['class']]
-            embed = discord.Embed(title = "Raspored " + class_name, url = 'https://www.tsrb.hr/b-smjena/', description = description, color = 0xFF5733)
+                url = 'https://www.tsrb.hr/b-smjena/'
+            embed = discord.Embed(title = "Raspored " + class_name, url = url, description = description, color = embed_color)
+        # If class is not configured set embed to an error
         else:
-            embed = discord.Embed(title = "Razred nije definiran", description = "Kako bi ste koristili ovu komandu potrebno je definirati razred", color = 0xFF5733)
+            embed = discord.Embed(title = "Razred nije definiran", description = "Kako bi ste koristili ovu komandu potrebno je definirati razred", color = embed_color)
             embed.add_field(name = 'Definirajte razred (Admin)', value = '```.conf raz <ime razreda>```', inline = False)
             embed.add_field(name = 'Napišite željeni razred u komandi', value = '```.raspored <ime razreda>```', inline = False)
-
+    # If there is no argument and command was send in PM, set embed to an error
     elif(name == None and ctx.guild == None):
-        embed = discord.Embed(title = "Razred nije definiran", description = "Kako bi ste koristili bota u privatnim porukama potrebno je definirati razred.", color = 0xFF5733)
-        embed.add_field(name = 'Primjer', value = '```.raspored <class name>```', inline = False)
+        embed = discord.Embed(title = "Razred nije definiran", description = "Kako bi ste koristili bota u privatnim porukama potrebno je definirati razred.", color = embed_color)
+        embed.add_field(name = 'Primjer', value = '```.raspored <ime razreda>```', inline = False)
+    # If there class as argument
     elif(name != None):
+        # Set argument to upper case
         name = name.upper()
+        # Check if specified class name exist
         if(
             (len(name) != 3) or
             not is_int(name[0]) or
@@ -681,15 +732,17 @@ async def raspored(ctx, name = None):
             (int(name[0]) < 1) or
             (name[2] not in A_classes and name[2] not in B_classes) or 
             (name[1] != '.')
-        ):  
-            embed = discord.Embed(title = "Razred nije pravilno definiran", description = "Traženi razred nije pronađen.", color = 0xFF5733)
+        ):
+            embed = discord.Embed(title = "Razred nije pravilno definiran", description = "Traženi razred nije pronađen.", color = embed_color)
             embed.add_field(name = 'Primjer', value = '```.raspored <ime razreda>```', inline = False)
         else:
             if name[2] in A_classes:
                 description = mega_dict_old_A[name]
+                url = 'https://www.tsrb.hr/a-smjena/'
             else:
                 description = mega_dict_old_B[name]
-            embed = discord.Embed(title = "Raspored " + name, url = 'https://www.tsrb.hr/b-smjena/', description = description, color = 0xFF5733)
+                url = 'https://www.tsrb.hr/b-smjena/'
+            embed = discord.Embed(title = "Raspored " + name, url = url, description = description, color = embed_color)
     await ctx.send(embed=embed)
 
 # Add help command to display help message
@@ -698,11 +751,12 @@ async def help(ctx):
     description = """\
 Ovo je lista komadi raspored bota i upute za korištenje,
 samo administratori servera mogu izvršiti komande označene sa (Admin).
+Komande koje se mogu koristiti i u privatnim porukama su označene sa (Private).
 **Napomena:** bot će automatski slati obavjesti samo ako su i kanal i razred konfigurirani"""
     embed = discord.Embed(
         title = 'Pomoć (Help)',
         description = description,
-        color = 0xFF5733
+        color = embed_color
     )
     embed.add_field(
         name = 'Raspored',
@@ -710,8 +764,19 @@ samo administratori servera mogu izvršiti komande označene sa (Admin).
         inline = False
     )
     embed.add_field(
-        name = 'Raspored za razred',
-        value = '```.raspored <ime razreda>```\nOva komanda ispisat će posljednje izmjene za razred naveden u komandi.\n(Također radi i u PM)'
+        name = 'Raspored za razred (Private)',
+        value = '```.raspored <ime razreda>```\nOva komanda ispisat će posljednje izmjene za razred naveden u komandi.\n(Također radi i u PM)',
+        inline = False
+    )
+    embed.add_field(
+        name = 'Verzija Bota (Private)',
+        value = '```.ver```\nIspisuje Verziju bota',
+        inline = False
+    )
+    embed.add_field(
+        name = 'Pomoć (Private)',
+        value = '```.help```\nIspisuje ovu poruku',
+        inline = False
     )
     embed.add_field(
         name = 'Konfiguracija kanala (Admin)', 
@@ -731,9 +796,9 @@ samo administratori servera mogu izvršiti komande označene sa (Admin).
 
 # Add version command to display bot version
 @client.command()
-async def version(ctx):
+async def ver(ctx):
     await ctx.send(
-        'Koristite **Raspored Bot** verzija **' + ver + '**\nMade by BrownBird Team'
+        'Koristite **Raspored Bot** verzija **' + version + '**\nMade by BrownBird Team'
     )
 
 @raz.error
