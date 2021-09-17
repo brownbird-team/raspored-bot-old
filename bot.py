@@ -113,176 +113,6 @@ embed_color = 0xFF5733
 # Debbug mode variable
 debug_mode = 0
 
-# Look for changes on site B
-def site_check_B():
-    while True:
-        # Debug mode
-        if(debug_mode == 1):
-            rasprint('Run B starting')
-        # Add global variables and create local ones
-        global mega_dict_old_B
-        global mega_dict_oldold_B
-        global first_run_B
-        global notify_B
-        global config
-        mega_dict = {}
-        # Set timer to value how much time bot should wait between checks
-        timer = 20
-
-        # Make reguest and get data from the site
-        try:
-            source = requests.get('https://tsrb.hr/b-smjena/').text
-        except:
-            rasprint("Error occurred while getting data from site B, skipping...")
-            continue
-
-        # Convert data to html code
-        soup = BeautifulSoup(source, 'lxml')
-        # Find iframes in the code
-        tables = soup.find_all('iframe')
-        # If there is no iframe print error and skip
-        if(tables == None):
-            rasprint("Can't get table link from site B, skipping...")
-            continue
-        # find right iframe link in list
-        for table in tables:
-            tlink = table.attrs
-            if 'docs.google.com' in tlink['src']:
-                tablelink = tlink['src']
-
-        # Get table code from iframe attribute
-        try:
-            newsource = requests.get(tablelink).text
-        except:
-            rasprint("Error occurred while getting data from iframe link B, skipping...")
-            continue
-        # Convert data to html
-        soup = BeautifulSoup(newsource, 'lxml')
-
-        # Set class names for each shift
-        A_classes = {'A', 'B', 'C', 'D', 'O'}
-        B_classes = {'E', 'F', 'G', 'M', 'N'}
-
-        mega_dict = {}
-        mega_dict['titles'] = {}
-        control = 0
-
-        # Look for table titles in code and add them to dictinary
-        for span in soup.find_all('span'):
-            if(str(span.string).startswith('IZMJENE')):
-                mega_dict['titles'][str(control)] = '**' + span.text + '**'
-                control = control + 1
-
-        mega_dict['tables'] = {}
-        control = -1
-        table_count = 0
-
-        # Get data for each class from each table
-        for table in soup.find_all('table'):
-            mega_dict['tables'][str(table_count)] = {}
-            # Store table shift (Prije podne / Poslije podne) in dictonary
-            if(table.find('span').text.upper().startswith('POSLIJE')):
-                mega_dict['tables'][str(table_count)]['shift'] = '**POSLIJE PODNE**'
-            elif(table.find('span').text.upper().startswith('PRIJE')):
-                mega_dict['tables'][str(table_count)]['shift'] = '**PRIJE PODNE**'
-
-            for row in table.find_all('tr'):
-                # Find cells in every row
-                for cell in row.find_all('td'):
-                    test = 0
-                    # Find text in each cell
-                    # Check if data is right and store it to the dict if it is
-                    for span in cell.find_all('span'):
-                        if(
-                            (len(span.text) == 3) and
-                            is_int(span.text[0]) and
-                            (int(span.text[0]) <= 4) and
-                            (int(span.text[0]) >= 1) and
-                            (span.text[2] in A_classes or span.text[2] in B_classes) and
-                            (span.text[1] == '.')
-                        ):
-                            control = 0
-                            class_name = span.text
-                            mega_dict['tables'][str(table_count)][class_name] = {}
-                        elif(control < 10 and control > -1):
-                            if(test == 0):
-                                mega_dict['tables'][str(table_count)][class_name][str(control)] = ''
-                                test = 1
-                            mega_dict['tables'][str(table_count)][class_name][str(control)] = mega_dict['tables'][str(table_count)][class_name][str(control)] + ' ' + span.text
-
-                        if(control == 9):
-                            control = -1
-                    if(control != -1):
-                        control = control + 1
-                    # If one cell goes over two colloms set next hour to same value
-                    if(cell.attrs['colspan'] == '2'):
-                        mega_dict['tables'][str(table_count)][class_name][str(control)] = ' ' + span.text
-                        control = control + 1
-            # If data in table is vaild move the counter
-            if(bool(mega_dict['tables'][str(table_count)])):
-                table_count = table_count + 1
-
-        # Convert data from dictionary to strings
-        mega_dict_temp = {}
-        for table_num, table in mega_dict['tables'].items():
-            # Check if table is empty
-            if(bool(table)):
-                # If shift is Prije podne
-                if(table['shift'] == '**PRIJE PODNE**'):
-                    for class_name, class_value in table.items():
-                        # Skip shift keyword
-                        if(class_name == 'shift'):
-                            continue
-                        # If class name is not in dict add it and set title
-                        if(class_name not in mega_dict_temp):
-                            mega_dict_temp[class_name] = mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
-                        # Else set title
-                        else:
-                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
-                        # Add new line for each school hour
-                        for hour, value in class_value.items():
-                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + hour + '. sat = ' + value.strip() + '\n'
-                        mega_dict_temp[class_name] = mega_dict_temp[class_name] + '```\n'
-                # If shift is Poslje podne
-                else:
-                    for class_name, class_value in table.items():
-                        # Skip shift keyword
-                        if(class_name == 'shift'):
-                            continue
-                        # If class name is not in dict add it and set title
-                        if(class_name not in mega_dict_temp):
-                            mega_dict_temp[class_name] = mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
-                        # Else set title
-                        else:
-                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
-                        # Add new line for each school hour
-                        for hour, value in class_value.items():
-                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + str(int(hour) - 2) + '. sat = ' + value.strip() + '\n'
-                        # End discord code block
-                        mega_dict_temp[class_name] = mega_dict_temp[class_name] + '```\n'
-
-        # Set mega_dict to converted values
-        mega_dict = dict(mega_dict_temp)
-
-        # Set Old_dict to mega_dict if this is the first run
-        if(first_run_B == 0):
-            mega_dict_old_B = dict(mega_dict)
-            mega_dict_oldold_B = dict(mega_dict)
-            first_run_B = 1
-            rasprint('Finished first run B successfully')
-        # If this is not first run compare old and new dict
-        # If they are diffrent set old dict to new one and notify variable to 1
-        elif(mega_dict != mega_dict_old_B):
-            rasprint('Changes has been made in B shift')
-            mega_dict_old_B = dict(mega_dict)
-            notify_B = 1
-
-        # Sleep for timer time
-        sleep(timer)
-        # Debug mode
-        if(debug_mode == 1):
-            rasprint('Run B finished')
-
 # Look for changes on site A
 def site_check_A():
     while True:
@@ -385,9 +215,12 @@ def site_check_A():
                     if(control != -1):
                         control = control + 1
                     # If one cell goes over two colloms set next hour to same value
-                    if(cell.attrs['colspan'] == '2'):
-                        mega_dict['tables'][str(table_count)][class_name][str(control)] = ' ' + span.text
-                        control = control + 1
+                    if(cell.attrs['colspan'] != '1'):
+                        for genious in range(2, int(cell.attrs['colspan'])):
+                            mega_dict['tables'][str(table_count)][class_name][str(control)] = ' ' + span.text
+                            control = control + 1
+                        if(control == 9):
+                            control = -1
             # If data in table is vaild move the counter
             if(bool(mega_dict['tables'][str(table_count)])):
                 table_count = table_count + 1
@@ -411,7 +244,7 @@ def site_check_A():
                             mega_dict_temp[class_name] = mega_dict_temp[class_name] + mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
                         # Add new line for each school hour
                         for hour, value in class_value.items():
-                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + hour + '. sat = ' + value.strip() + '\n'
+                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + ' ' + hour + '. sat = ' + value.strip() + '\n'
                         mega_dict_temp[class_name] = mega_dict_temp[class_name] + '```\n'
                 # If shift is Poslje podne
                 else:
@@ -427,7 +260,10 @@ def site_check_A():
                             mega_dict_temp[class_name] = mega_dict_temp[class_name] + mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
                         # Add new line for each school hour
                         for hour, value in class_value.items():
-                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + str(int(hour) - 2) + '. sat = ' + value.strip() + '\n'
+                            if(int(hour) - 2 == -1):
+                                mega_dict_temp[class_name] = mega_dict_temp[class_name] + str(int(hour) - 2) + '. sat = ' + value.strip() + '\n'
+                            else:
+                                mega_dict_temp[class_name] = mega_dict_temp[class_name] + ' ' + str(int(hour) - 2) + '. sat = ' + value.strip() + '\n'
                         # End discord code block
                         mega_dict_temp[class_name] = mega_dict_temp[class_name] + '```\n'
 
@@ -453,6 +289,182 @@ def site_check_A():
         if(debug_mode == 1):
             rasprint('Run A finished')
 
+# Look for changes on site B
+def site_check_B():
+    while True:
+        # Debug mode
+        if(debug_mode == 1):
+            rasprint('Run B starting')
+        # Add global variables and create local ones
+        global mega_dict_old_B
+        global mega_dict_oldold_B
+        global first_run_B
+        global notify_B
+        global config
+        mega_dict = {}
+        # Set timer to value how much time bot should wait between checks
+        timer = 20
+
+        # Make reguest and get data from the site
+        try:
+            source = requests.get('https://tsrb.hr/b-smjena/').text
+        except:
+            rasprint("Error occurred while getting data from site B, skipping...")
+            continue
+
+        # Convert data to html code
+        soup = BeautifulSoup(source, 'lxml')
+        # Find iframes in the code
+        tables = soup.find_all('iframe')
+        # If there is no iframe print error and skip
+        if(tables == None):
+            rasprint("Can't get table link from site B, skipping...")
+            continue
+        # find right iframe link in list
+        for table in tables:
+            tlink = table.attrs
+            if 'docs.google.com' in tlink['src']:
+                tablelink = tlink['src']
+
+        # Get table code from iframe attribute
+        try:
+            newsource = requests.get(tablelink).text
+        except:
+            rasprint("Error occurred while getting data from iframe link B, skipping...")
+            continue
+        # Convert data to html
+        soup = BeautifulSoup(newsource, 'lxml')
+
+        # Set class names for each shift
+        A_classes = {'A', 'B', 'C', 'D', 'O'}
+        B_classes = {'E', 'F', 'G', 'M', 'N'}
+
+        mega_dict = {}
+        mega_dict['titles'] = {}
+        control = 0
+
+        # Look for table titles in code and add them to dictinary
+        for span in soup.find_all('span'):
+            if(str(span.string).startswith('IZMJENE')):
+                mega_dict['titles'][str(control)] = '**' + span.text + '**'
+                control = control + 1
+
+        mega_dict['tables'] = {}
+        control = -1
+        table_count = 0
+
+        # Get data for each class from each table
+        for table in soup.find_all('table'):
+            mega_dict['tables'][str(table_count)] = {}
+            # Store table shift (Prije podne / Poslije podne) in dictonary
+            if(table.find('span').text.upper().startswith('POSLIJE')):
+                mega_dict['tables'][str(table_count)]['shift'] = '**POSLIJE PODNE**'
+            elif(table.find('span').text.upper().startswith('PRIJE')):
+                mega_dict['tables'][str(table_count)]['shift'] = '**PRIJE PODNE**'
+
+            for row in table.find_all('tr'):
+                # Find cells in every row
+                for cell in row.find_all('td'):
+                    test = 0
+                    # Find text in each cell
+                    # Check if data is right and store it to the dict if it is
+                    for span in cell.find_all('span'):
+                        if(
+                            (len(span.text) == 3) and
+                            is_int(span.text[0]) and
+                            (int(span.text[0]) <= 4) and
+                            (int(span.text[0]) >= 1) and
+                            (span.text[2] in A_classes or span.text[2] in B_classes) and
+                            (span.text[1] == '.')
+                        ):
+                            control = 0
+                            class_name = span.text
+                            mega_dict['tables'][str(table_count)][class_name] = {}
+                        elif(control < 10 and control > -1):
+                            if(test == 0):
+                                mega_dict['tables'][str(table_count)][class_name][str(control)] = ''
+                                test = 1
+                            mega_dict['tables'][str(table_count)][class_name][str(control)] = mega_dict['tables'][str(table_count)][class_name][str(control)] + ' ' + span.text
+
+                        if(control == 9):
+                            control = -1
+                    if(control != -1):
+                        control = control + 1
+                    # If one cell goes over two colloms set next hour to same value
+                    if(cell.attrs['colspan'] != '1'):
+                        for genious in range(2, int(cell.attrs['colspan'])):
+                            mega_dict['tables'][str(table_count)][class_name][str(control)] = ' ' + span.text
+                            control = control + 1
+                        if(control == 9):
+                            control = -1
+            # If data in table is vaild move the counter
+            if(bool(mega_dict['tables'][str(table_count)])):
+                table_count = table_count + 1
+
+        # Convert data from dictionary to strings
+        mega_dict_temp = {}
+        for table_num, table in mega_dict['tables'].items():
+            # Check if table is empty
+            if(bool(table)):
+                # If shift is Prije podne
+                if(table['shift'] == '**PRIJE PODNE**'):
+                    for class_name, class_value in table.items():
+                        # Skip shift keyword
+                        if(class_name == 'shift'):
+                            continue
+                        # If class name is not in dict add it and set title
+                        if(class_name not in mega_dict_temp):
+                            mega_dict_temp[class_name] = mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
+                        # Else set title
+                        else:
+                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
+                        # Add new line for each school hour
+                        for hour, value in class_value.items():
+                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + ' ' + hour + '. sat = ' + value.strip() + '\n'
+                        mega_dict_temp[class_name] = mega_dict_temp[class_name] + '```\n'
+                # If shift is Poslje podne
+                else:
+                    for class_name, class_value in table.items():
+                        # Skip shift keyword
+                        if(class_name == 'shift'):
+                            continue
+                        # If class name is not in dict add it and set title
+                        if(class_name not in mega_dict_temp):
+                            mega_dict_temp[class_name] = mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
+                        # Else set title
+                        else:
+                            mega_dict_temp[class_name] = mega_dict_temp[class_name] + mega_dict['titles'][table_num] + '\n' + table['shift'] + '\n```'
+                        # Add new line for each school hour
+                        for hour, value in class_value.items():
+                            if(int(hour) - 2 == -1):
+                                mega_dict_temp[class_name] = mega_dict_temp[class_name] + str(int(hour) - 2) + '. sat = ' + value.strip() + '\n'
+                            else:
+                                mega_dict_temp[class_name] = mega_dict_temp[class_name] + ' ' + str(int(hour) - 2) + '. sat = ' + value.strip() + '\n'
+                        # End discord code block
+                        mega_dict_temp[class_name] = mega_dict_temp[class_name] + '```\n'
+
+        # Set mega_dict to converted values
+        mega_dict = dict(mega_dict_temp)
+
+        # Set Old_dict to mega_dict if this is the first run
+        if(first_run_B == 0):
+            mega_dict_old_B = dict(mega_dict)
+            mega_dict_oldold_B = dict(mega_dict)
+            first_run_B = 1
+            rasprint('Finished first run B successfully')
+        # If this is not first run compare old and new dict
+        # If they are diffrent set old dict to new one and notify variable to 1
+        elif(mega_dict != mega_dict_old_B):
+            rasprint('Changes has been made in B shift')
+            mega_dict_old_B = dict(mega_dict)
+            notify_B = 1
+
+        # Sleep for timer time
+        sleep(timer)
+        # Debug mode
+        if(debug_mode == 1):
+            rasprint('Run B finished')
+
 # Start site check threads
 site_check_A_thread = threading.Thread(target = site_check_A)
 site_check_A_thread.start()
@@ -469,16 +481,28 @@ def get_input():
     global notify_B
     global dnotify_A
     global dnotify_B
+    global client
     while True:
         value = input()
         if(value == 'debug thread'):
             rasprint('Checking if threads are alive...')
             rasprint('site_check_A: ' + str(site_check_A_thread.is_alive()))
             rasprint('site_check_B: ' + str(site_check_B_thread.is_alive()))
-        if(value == 'list'):
+        if(value == 'dlist'):
+            i = 0
             rasprint('List of servers in database:')
-            for k, v in data.items():
+            for k in data.keys():
+                i += 1
                 rasprint('- ' + data[k]['name'])
+            rasprint('All (' + str(i) + ')')
+        if(value == 'list'):
+            i = 0
+            rasprint('List of servers where bot is in:')
+            for server in client.guilds:
+                i += 1
+                rasprint('- ' + server.name)
+            rasprint('All (' + str(i) + ')')
+
         if(value == 'debug on'):
             debug_mode = 1
             rasprint('Debug mode on')
@@ -495,7 +519,8 @@ def get_input():
             dnotify_B = 1
         if(value == 'help'):
             rasprint('List of available commands:')
-            rasprint('list - list all servers from database')
+            rasprint('list - List all servers where bot is in')
+            rasprint('dlist - list all servers from database')
             rasprint('debug on - enter debug mode')
             rasprint('debug off - exit debug mode')
             rasprint('notify a - send last changes to all configured servers in A shift')
