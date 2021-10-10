@@ -9,7 +9,7 @@
 # Discord bot used to look for daily schedule changes on tsrb.hr
 
 # Bot version
-version = '2.3.1'
+version = '2.4.0'
 
 # Import stuff
 from bs4 import BeautifulSoup
@@ -22,18 +22,19 @@ import requests
 import discord
 import logging
 import os
+import re
 import yaml
 import json
 
 # Print version in console (in color)
-def prRed(skk): print("\033[91m{}\033[00m" .format(skk))
+def prRed(skk): print("\u001b[32m{}\033[00m" .format(skk))
 prRed("RasporedBot\n")
 prRed("Version: " + version)
 prRed("Made by BrownBird Team\n")
 
 # Create function to print stuff to console
 def rasprint(message):
-    print( '[\033[91mRasporedBot\033[00m] [' + date.today().strftime('%d-%m-%Y') + '] [' + strftime('%H:%M:%S', localtime()) + '] ' + message)
+    print( '[\u001b[32mRasporedBot\033[00m] [' + date.today().strftime('%d-%m-%Y') + '] [' + strftime('%H:%M:%S', localtime()) + '] ' + message)
 
 # Create file config.yml if doesn't exist
 if(os.path.isfile('config.yml') == False):
@@ -117,6 +118,8 @@ dnotify_A = False
 embed_color = config['settings']['color']
 # Debbug mode variable
 debug_mode = False
+# Classroms changes disctionary
+classrooms = {}
 
 def site_check(shift: str, debug = False):
     shift = shift.upper()
@@ -125,8 +128,6 @@ def site_check(shift: str, debug = False):
         rasprint('Run {} starting'.format(shift))
     # Create variables
     mega_dict = {}
-    # Set timer to value how much time bot should wait between checks
-    timer = 20
 
     # Make reguest and get data from the site
     try:
@@ -173,8 +174,10 @@ def site_check(shift: str, debug = False):
             control = control + 1
 
     mega_dict['tables'] = {}
+    classrooms = {}
     control = -1
     table_count = 0
+    title_count = 0
 
     # Get data for each class from each table
     for table in soup.find_all('table'):
@@ -231,6 +234,21 @@ def site_check(shift: str, debug = False):
         if(bool(mega_dict['tables'][str(table_count)])):
             table_count = table_count + 1
 
+            classroomst = ''
+            par = table.next_sibling
+            while True:
+                if par.name != 'p' or par == None:
+                    break
+                if par.text.strip().startswith('RAS'):
+                    break
+                for span in par.find_all('span'):
+                    if span.text.replace(' ', '') != '':
+                        classroomst += re.sub('\s\s+', '\n', span.text)
+                classroomst += '\n'
+                par = par.next_sibling
+            classrooms[mega_dict['titles'][str(title_count)]] = re.sub('\s\s+', '\n', re.sub(r'\n\s*\n', '\n', classroomst))
+            title_count += 1
+            
     # Convert data from dictionary to strings
     mega_dict_temp = {}
     for table_num, table in mega_dict['tables'].items():
@@ -283,7 +301,7 @@ def site_check(shift: str, debug = False):
         rasprint('Run {} finished'.format(shift))
     
     # Return dictionary
-    return mega_dict
+    return mega_dict, classrooms
 
 # Get input from console
 @tasks.loop()
@@ -343,9 +361,11 @@ client = commands.Bot(command_prefix = config['settings']['bot_prefix'], help_co
 @client.event
 # When bot is ready
 async def on_ready():
-    # Start loop to check notify variable
-    notify_loop.start()
-    console_input.start()
+    # Start loops if they are not running
+    if not notify_loop.is_running():
+        notify_loop.start()
+    if not console_input.is_running():
+        console_input.start()
     # Print info to console
     rasprint('Connected to bot: {}'.format(client.user))
     rasprint('Bot ID: {}'.format(client.user.id))
@@ -394,11 +414,12 @@ async def notify_loop():
     global mega_dict_old_B
     global lastchange
     global config
+    global classrooms
 
     loop = asyncio.get_event_loop()
-    mega_dict_A = await loop.run_in_executor(None, site_check, 'A', debug_mode)
+    mega_dict_A, classrooms['A'] = await loop.run_in_executor(None, site_check, 'A', debug_mode)
     loop = asyncio.get_event_loop()
-    mega_dict_B = await loop.run_in_executor(None, site_check, 'B', debug_mode)
+    mega_dict_B, classrooms['B'] = await loop.run_in_executor(None, site_check, 'B', debug_mode)
 
     if(first_run):
         # Read last change from file
@@ -436,7 +457,10 @@ async def notify_loop():
                         color = embed_color)
                     for k, v in mega_dict_A[data[str(server.id)]['class']].items():
                         embed.add_field(name = k, value = v, inline = False)
-                    await channel.send(embed=embed)
+                    try:
+                        await channel.send(embed=embed)
+                    except discord.errors.Forbidden:
+                        rasprint("Don't have right permissions in server: {}".format(data[str(server.id)]['name']))
         # Set old list to new one after everyone are notified
         mega_dict_old_A = dict(mega_dict_A)
         # Store last change to file
@@ -464,7 +488,10 @@ async def notify_loop():
                         color = embed_color)
                     for k, v in mega_dict_B[data[str(server.id)]['class']].items():
                         embed.add_field(name = k, value = v, inline = False)
-                    await channel.send(embed=embed)
+                    try:
+                        await channel.send(embed=embed)
+                    except discord.errors.Forbidden:
+                        rasprint("Don't have right permissions in server: {}".format(data[str(server.id)]['name']))
         # Set old list to new one after everyone are notified
         mega_dict_old_B = dict(mega_dict_B)
         # Store last change to file
@@ -581,7 +608,7 @@ def get_data(class_name, megadictA, megadictB):
     return data
 
 # Add command raspored to send last changes, for class defined in database, or specified as command attribute
-@client.command(aliases=['ras', 'r'])
+@client.command(aliases = ['ras', 'r'])
 async def raspored(ctx, name = None):
     # Send error if first run is not done yet
     if(first_run):
@@ -635,6 +662,37 @@ async def raspored(ctx, name = None):
                     embed.add_field(name = k, value = v, inline = False)
     await ctx.send(embed=embed)
 
+@client.command(aliases = ['u', 'uc'])
+async def ucionice(ctx, shift = None):
+    if(first_run):
+        embed = discord.Embed(title = 'ZAHTJEV ODBIJEN', description = 'Pričekaj, povlačim podatke sa stranice\n ovo može potrajati do 30 s', color = embed_color)
+    elif(shift != None):
+        if(shift.upper() == 'A' or shift.upper() == 'B'):
+            embed = discord.Embed(
+                title = 'Izmjene u učionicama',
+                description = 'Napomena: ova funkcija još nije potpuno stabilna.',
+                color = embed_color)
+            for k, v in classrooms[shift.upper()].items():
+                embed.add_field(name = k, value = '```' + v + '```', inline = False)
+        else:
+            embed = discord.Embed(title = 'Smjena nije definirana', description = 'Molim upišite valjanu smjenu (A ili B)\nPrimjer: `.ucionice B`', color = embed_color)
+    elif(ctx.guild == None and shift == None):
+        embed = discord.Embed(title = 'Smjena nije definirana', description = 'Molim upišite valjanu smjenu (A ili B)\nPrimjer: `.ucionice B`', color = embed_color)
+    elif(ctx.guild != None):
+        server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
+        if(data[str(server_id)]['shift'] != None):
+            embed = discord.Embed(
+                title = 'Izmjene u učionicama',
+                description = 'Napomena: ova funkcija još nije potpuno stabilna.',
+                color = embed_color)
+            for k, v in classrooms[data[str(server_id)]['shift']].items():
+                embed.add_field(name = k, value = '```' + v + '```', inline = False)
+        else:
+            embed = discord.Embed(title = 'Smjena nije definirana',
+            description = 'Kako biste koristili ovu komandu bez da definirate smjenu pri izvršavanju komande, morate definirati razred za ovaj server\nPrimjer: `.conf raz <ime razreda>`',
+            color = embed_color)
+    await ctx.send(embed = embed)
+
 # Add help command to display help message
 @client.command()
 async def help(ctx):
@@ -649,12 +707,12 @@ Komande koje se mogu koristiti i u privatnim porukama su označene sa (Private).
         color = embed_color
     )
     embed.add_field(
-        name = 'Raspored',
+        name = 'Raspored (Alias: .r .ras)',
         value = '```.raspored```\nOva komanda ispisat će posljednje izmjene u rasporedu za razred definiran pri konfiguraciji, te se neće izvršiti ukoliko razred nije definiran.',
         inline = False
     )
     embed.add_field(
-        name = 'Raspored za razred (Private)',
+        name = 'Raspored za razred (Private) (Alias: .r .ras)',
         value = '```.raspored <ime razreda>```\nOva komanda ispisat će posljednje izmjene za razred naveden u komandi.\n(Također radi i u PM)',
         inline = False
     )
