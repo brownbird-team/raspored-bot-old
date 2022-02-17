@@ -1,0 +1,15 @@
+# This is a settings file for Raspored bot
+# Don't delete settings in this file
+
+settings:
+  # Enter your bots token here
+  token: ''
+  # Bot prefix (prefix for bot commands)
+  bot_prefix: '.'
+  # Time to wait between site checks (in seconds)
+  step: 60
+  # Color of discord embed
+  color: 0xFF5733
+  # Skip reading last change from file
+  # Set this to true if bot was offline for long time
+  skip: false
