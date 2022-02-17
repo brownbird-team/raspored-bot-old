@@ -4,6 +4,7 @@ Raspored Bot prati promjene u dnevnim izmjenama rasporeda sati, na stranicama TS
 Ovo je stara verzija raspored bota **2.4.1**, te više neće biti održavana.
 
 **U ovoj verziji bota postoje greške koje mogu dovesti zaustavljanja rada.**
+Predpostavljam da se radi o činjenici da 4. razredi imaju drugačija slova, na što nisam mislio pri dizajnu.
 
 ## Komande iz komandne linije
 
