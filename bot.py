@@ -300,8 +300,13 @@ def site_check(shift: str, debug = False):
     if(debug):
         rasprint('Run {} finished'.format(shift))
     
+    class result:
+        def __init__(self):
+            self.classrooms = classrooms
+            self.dict = mega_dict
+
     # Return dictionary
-    return mega_dict, classrooms
+    return result()
 
 # Get input from console
 @tasks.loop()
@@ -417,9 +422,21 @@ async def notify_loop():
     global classrooms
 
     loop = asyncio.get_event_loop()
-    mega_dict_A, classrooms['A'] = await loop.run_in_executor(None, site_check, 'A', debug_mode)
+    mega_class_A = await loop.run_in_executor(None, site_check, 'A', debug_mode)
     loop = asyncio.get_event_loop()
-    mega_dict_B, classrooms['B'] = await loop.run_in_executor(None, site_check, 'B', debug_mode)
+    mega_class_B = await loop.run_in_executor(None, site_check, 'B', debug_mode)
+
+    if mega_class_A != -1:
+        mega_dict_A = mega_class_A.dict
+        classrooms['A'] = mega_class_A.classrooms
+    else:
+        mega_dict_A = -1
+        
+    if mega_class_B != -1:
+        mega_dict_B = mega_class_B.dict
+        classrooms['B'] = mega_class_B.classrooms
+    else:
+        mega_dict_B = -1
 
     if(first_run):
         # Read last change from file
@@ -484,7 +501,7 @@ async def notify_loop():
                     channel = client.get_channel(data[str(server.id)]['channel_id'])
                     embed=discord.Embed(
                         title="Izmjene u rasporedu " + data[str(server.id)]['class'],
-                        url='https://www.tsrb.hr/a-smjena/',
+                        url='https://www.tsrb.hr/b-smjena/',
                         color = embed_color)
                     for k, v in mega_dict_B[data[str(server.id)]['class']].items():
                         embed.add_field(name = k, value = v, inline = False)
@@ -669,7 +686,7 @@ async def ucionice(ctx, shift = None):
     elif(shift != None):
         if(shift.upper() == 'A' or shift.upper() == 'B'):
             embed = discord.Embed(
-                title = 'Izmjene u učionicama',
+                title = 'Izmjene u učionicama ' + shift.upper() + ' smijena',
                 description = 'Napomena: ova funkcija još nije potpuno stabilna.',
                 color = embed_color)
             for k, v in classrooms[shift.upper()].items():
@@ -682,7 +699,7 @@ async def ucionice(ctx, shift = None):
         server_id = discord.utils.get(client.guilds, name=str(ctx.guild)).id
         if(data[str(server_id)]['shift'] != None):
             embed = discord.Embed(
-                title = 'Izmjene u učionicama',
+                title = 'Izmjene u učionicama ' + data[str(server_id)]['shift'] + ' smijena',
                 description = 'Napomena: ova funkcija još nije potpuno stabilna.',
                 color = embed_color)
             for k, v in classrooms[data[str(server_id)]['shift']].items():
