@@ -9,7 +9,7 @@
 # Discord bot used to look for daily schedule changes on tsrb.hr
 
 # Bot version
-version = '2.4.0'
+version = '2.4.1'
 
 # Import stuff
 from bs4 import BeautifulSoup
