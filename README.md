@@ -7,13 +7,27 @@ Ovo je stara verzija raspored bota **2.4.1**, te više neće biti održavana.
 
 ## Komande iz komandne linije
 
-`list`      - izlistava sve servere u kojima je bot trenutno
-`dlist`     - izlistava sve servere iz baze podataka
-`debug on`  - uključuje debug mode, odnosno ispisuje kada povlači podatke
-`debug off` - isključuje debug mode
-`notify a`  - šalje zadnju izmjenu svim konfiguriranim serverima iz A smjene
-`notify b`  - šalje zadnju izmjenu svim konfiguriranim serverima iz B smjene
-`help`      - izlistava listu svih komandi
+`list`
+- izlistava sve servere u kojima je bot trenutno
+
+`dlist`
+- izlistava sve servere iz baze podataka
+
+`debug on`
+- uključuje debug mode, odnosno ispisuje kada povlači podatke
+
+`debug off`
+- isključuje debug mode
+
+`notify a`
+- šalje zadnju izmjenu svim konfiguriranim serverima iz A smjene
+
+`notify b`
+- šalje zadnju izmjenu svim konfiguriranim serverima iz B smjene
+
+`help`
+- izlistava listu svih komandi
+
 
 ## Komande na discordu
 
